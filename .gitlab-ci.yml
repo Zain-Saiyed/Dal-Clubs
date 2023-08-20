@@ -1,0 +1,93 @@
+stages:
+    - build_stage
+    - test_stage
+    - deploy_stage
+# Building the backend project
+build_backend:
+    stage: build_stage
+    image: maven:latest
+    before_script:
+        - cd backend
+    script:
+        - echo "Starting  - Maven Build stage"
+        - export DATABASE_TYPE=dev
+        - apt-get update
+        - apt-get install gettext-base moreutils -y
+        - envsubst < src/main/resources/database.properties | sponge src/main/resources/database.properties
+        - envsubst < src/main/resources/security.properties | sponge src/main/resources/security.properties
+        - envsubst < src/main/resources/application.properties | sponge src/main/resources/application.properties
+        - mvn clean install # compile, package, and install
+        - echo "Completed - Maven Build stage"
+    artifacts:
+        paths:
+            - target/*.jar
+    rules:
+        - changes: 
+            - backend/**/*
+# Building the frontend project
+build_frontend:
+    stage: build_stage
+    image: node:latest
+    before_script:
+        - cd frontend
+    script:
+        - echo "Starting  - React Build stage"
+        - npm install
+        - npm run build 
+        - echo "Completed - React Build stage"    
+    rules:
+        - changes: 
+            - frontend/**/*
+
+# Executing tests in backend project
+test_backend:
+    stage: test_stage
+    image: maven:latest
+    before_script:
+        - cd backend
+    script:
+        - echo "Starting  - Testing Maven Build"
+        - export DATABASE_TYPE=test
+        - apt-get update
+        - apt-get install gettext-base moreutils -y
+        - envsubst < src/main/resources/database.properties | sponge src/main/resources/database.properties
+        - envsubst < src/main/resources/security.properties | sponge src/main/resources/security.properties
+        - envsubst < src/main/resources/application.properties | sponge src/main/resources/application.properties
+        - mvn test
+        - echo "Completed - Testing Maven Build"
+    artifacts:
+        paths:
+            - target/*.jar
+    rules:
+        - changes: 
+            - backend/**/*
+# Deploy the backend build on Render.com
+deploy_backend:
+    stage: deploy_stage
+    before_script:
+        - apt update
+        - apt install curl -y
+    script:
+        - echo "Starting  - Deploying Springboot"
+        - export DATABASE_TYPE=prod
+        - apt-get update
+        - apt-get install gettext-base moreutils -y
+        - curl -s "https://api.render.com/deploy/srv-${RENDER_DEPLOY_KEY_1}?key=${RENDER_DEPLOY_KEY_2}" 
+        - echo "Completed - Deploying Springboot"
+
+    # Execute Deploy only when commits are made on production 'main' branch
+    only:
+        - main
+# Deploy the frontend build on Netlify
+deploy_frontend:
+    stage: deploy_stage
+    before_script:
+        - apt update
+        - apt install curl -y
+    script:
+        - echo "Starting  - Deploying React Frontend"
+        - curl -X POST "https://api.netlify.com/build_hooks/${NETLIFY_DEPLOY_KEY}" 
+        - echo "Completed - Deploying React Frontend"
+    # Execute Deploy only when commits are made on production 'main' branch
+    only:
+        - main
